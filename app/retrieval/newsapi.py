@@ -40,3 +40,5 @@ def fetch_news(query: str, page_size: int = 5):
         # Network error or timeout
         print("Request Exception:", e)
         return {"error": str(e)}
+    
+    
