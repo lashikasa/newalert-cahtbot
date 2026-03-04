@@ -1,107 +1,59 @@
-📰 Bitext News Alert Chatbot
+Bitext News Alert Chatbot
 
-Bitext News Alert Chatbot is an intelligent news assistant that allows users to query the latest news worldwide using natural language. It can understand conversational nuances, handle double intents and negation, and provide summarized, well-cited news with source links.
+The Bitext News Alert Chatbot is an intelligent, AI-powered chatbot designed to provide real-time news updates and insights in natural language. Unlike traditional news aggregators, this system understands user queries with double intent and negation, allowing you to ask complex questions such as:
 
-Features
+“Show me news on Apple but not about the iPhone”
 
-Natural Language Queries: Ask questions in plain English and get relevant news.
+“Latest news on self-driving cars but not about Waymo”
 
-Double Intent & Negation Handling: Example: "Show news about Apple but not about iPhone."
+The chatbot fetches relevant articles from trusted sources, summarizes content concisely, and provides confidence levels for each response. Users can also see the original sources as clickable links for verification.
 
-Trending News: Fetches the most recent trending news automatically.
+Key Features
 
-Summarized Answers: Summarizes multiple articles in clear, concise sentences.
+Natural Language Understanding (NLU): Handles multi-intent queries, negation, and complex phrasing.
 
-Source Citations: Provides direct URLs for each news snippet.
+Real-time Trending News: Displays the latest trending news dynamically for quick access.
 
-Confidence Scoring: Estimates reliability of the answer (High, Medium, Low) based on content relevance.
+Contextual Summarization: Summarizes articles into 2–4 sentence answers, avoiding verbatim copying.
 
-Violation Detection: Automatically blocks content related to sensitive, illegal, or social violation topics.
+Confidence Scoring: Provides confidence levels (High, Medium, Low) based on the relevance of the retrieved news.
 
-Interactive Frontend: Click trending news to automatically query the chatbot.
+Source Attribution: Links to original news articles as bullet points for easy reference.
 
-Frontend Tools
+Content Safety: Filters out queries related to social violations, illegal activities, and sensitive content.
 
-Next.js 16+ – React-based framework for building the frontend.
+Technology Stack & Tools
 
-React Hooks (useState, useEffect, useRef) – For state management and dynamic updates.
+Backend: FastAPI
+ – high-performance API framework for Python.
 
-Axios – Handles API requests to the backend.
+Frontend: Next.js
+ with React and Tailwind CSS for a responsive UI.
 
-Tailwind CSS – Provides modern, responsive styling.
+Embeddings: Sentence Transformers – all-MiniLM-L6-v2
+ for semantic search.
 
-Dynamic Trending News Panel – Shows the latest top 3 trending news on the side.
+Vector Store: FAISS
+ for fast similarity search.
 
-Backend Tools
+Generative AI: Optional Gemini Pro API
+ for enhanced summarization.
 
-FastAPI – Serves the backend API.
+Data Sources: Integrated with NewsAPI
+ to fetch global news.
 
-FAISS – Vector search for semantic retrieval of relevant news chunks.
+Usage
 
-SentenceTransformers (MiniLM) – Generates embeddings for query and article comparison.
+Type a query in natural language or click on a trending news topic.
 
-Google Gemini Pro (optional) – LLM for generating human-like summaries.
+The bot will return a concise summary with confidence scoring and clickable sources.
 
-NewsAPI – Fetches real-time news articles globally.
+Confidence levels are color-coded:
 
-Python Libraries: numpy, dotenv, logging.
+High (Red)
 
-Key Functionalities
+Medium (Green)
 
-Query News
+Low (Yellow)
 
-Endpoint: /query?q=YOUR_QUERY
-
-Returns a summarized answer, sources, confidence, and retrieved chunks.
-
-Trending News
-
-Endpoint: /trending?top_k=3
-
-Returns top trending news headlines for quick queries.
-
-Content Moderation
-
-Automatically detects sensitive or violation topics (violence, illegal, drugs, hate speech) and returns a friendly warning.
-
-Confidence Levels
-
-Categorizes answers as High, Medium, or Low confidence.
-
-Shows confidence as color-coded badges in the frontend.
-
-How to Run
-
-Clone the repository:
-
-git clone https://github.com/lashikasa/frontend.git
-
-Install frontend dependencies:
-
-cd frontend
-npm install
-npm run dev
-
-Install backend dependencies:
-
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload
-
-Set your environment variables in .env:
-
-NEWSAPI_KEY=your_newsapi_key
-GEMINI_API_KEY=your_gemini_key
-
-Open the frontend at http://localhost:3000
-.
-
-Future Improvements
-
-Add personalized news alerts via email or notifications.
-
-Enhance LLM summarization with multi-language support.
-
-Integrate real-time social media news.
-
-Add voice input/output for conversational AI experience.
+This description frames your project professionally, highlights the unique features, and also mentions the tech stack clearly for other developers.
