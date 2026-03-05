@@ -1,194 +1,372 @@
-# main.py
 import os
 import logging
 import numpy as np
+from datetime import datetime
 from dotenv import load_dotenv
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from sentence_transformers import SentenceTransformer, util
+from sklearn.cluster import KMeans
+
+from apscheduler.schedulers.background import BackgroundScheduler
+
 from app.retrieval.newsapi import fetch_news
 from app.vectorstore.faiss_store import FAISSStore
 from app.utils import chunk_text
 
+import google.generativeai as genai
+
 # ----------------------------
-# Load environment variables
+# Load env
 # ----------------------------
 load_dotenv()
 
 # ----------------------------
-# FastAPI app
+# Logging
 # ----------------------------
-app = FastAPI(title="NewsRAG Backend")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ----------------------------
-# CORS Setup for Next.js frontend
+# FastAPI
+# ----------------------------
+app = FastAPI(title="NewsRAG Backend")
+
+# ----------------------------
+# CORS
 # ----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js origin
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ----------------------------
-# Embedding model: MiniLM
+# Embedding Model
 # ----------------------------
-embed_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-def embed_texts(texts: list) -> np.ndarray:
+def embed_texts(texts):
     embeddings = embed_model.encode(texts, convert_to_numpy=True)
     return embeddings.astype("float32")
 
 # ----------------------------
-# Gemini Pro client (optional)
+# Gemini Setup
 # ----------------------------
-try:
-    import google.generativeai as genai
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-except Exception:
-    genai = None
-    logger.warning("Gemini client not available. Generative API calls will fail.")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ----------------------------
-# Helper: compute confidence
+# Chat Memory
 # ----------------------------
-def compute_confidence(answer_text, retrieved_chunks):
-    answer_emb = embed_texts([answer_text])[0]
-    chunk_texts = [c['text'] for c in retrieved_chunks]
-    chunk_embs = embed_texts(chunk_texts)
-    sims = util.cos_sim(answer_emb, chunk_embs).numpy().flatten()
-    max_sim = float(np.max(sims))
-    coverage = np.mean(sims >= 0.7)
-    confidence = max_sim * coverage
-    return min(confidence, 1.0)
+chat_history = []
+
+def add_message(role, text):
+
+    chat_history.append({
+        "role": role,
+        "text": text
+    })
+
+    if len(chat_history) > 10:
+        chat_history.pop(0)
+
+def get_memory():
+
+    context = ""
+
+    for msg in chat_history:
+        context += f"{msg['role']}: {msg['text']}\n"
+
+    return context
 
 # ----------------------------
-# Restricted keywords
+# Ranking (Relevance + Recency)
 # ----------------------------
-SOCIAL_VIOLATION_KEYWORDS = [
-    "violence", "illegal", "hate speech", "adult content", "drugs", "terrorism"
-]
+def rank_articles(query, articles):
 
-# ----------------------------
-# /query endpoint
-# ----------------------------
-@app.get("/query")
-def query_news(q: str, top_k: int = 3, chunk_size: int = 200):
-    # 0️⃣ Restricted keyword check
-    if any(word.lower() in q.lower() for word in SOCIAL_VIOLATION_KEYWORDS):
-        return {
-            "query": q,
-            "answer": "⚠️ Sorry, I cannot provide information on that topic due to content policies.",
-            "is_violation": True,
-            "sources": {},
-            "retrieved_chunks": []
-        }
+    query_emb = embed_texts([query])[0]
 
-    # 1️⃣ Fetch news
-    articles = fetch_news(q)
-    if isinstance(articles, dict) and "error" in articles:
-        return {"query": q, "error": articles["error"], "is_violation": False}
+    ranked = []
 
-    # 2️⃣ Chunk articles
-    all_chunks = []
     for article in articles:
-        text = f"{article.get('title', '')} {article.get('description', '')}"
-        url = article.get('url', '')
-        chunks = chunk_text(text, chunk_size)
-        for chunk in chunks:
-            all_chunks.append({"text": chunk, "source": url})
 
-    if not all_chunks:
-        return {"query": q, "error": "No article chunks available", "is_violation": False}
+        text = f"{article.get('title','')} {article.get('description','')}"
 
-    # 3️⃣ Embed chunks
-    try:
-        chunk_embeddings = embed_texts([c['text'] for c in all_chunks])
-    except Exception as e:
-        return {"query": q, "error": f"Embedding failed: {e}", "is_violation": False}
+        emb = embed_texts([text])[0]
 
-    # 4️⃣ FAISS store
-    dimension = chunk_embeddings.shape[1]
-    store = FAISSStore(dimension)
-    store.add(chunk_embeddings, all_chunks)
+        similarity = util.cos_sim(query_emb, emb).item()
 
-    # 5️⃣ Embed query
-    try:
-        query_embedding = embed_texts([q])
-    except Exception as e:
-        return {"query": q, "error": f"Embedding failed: {e}", "is_violation": False}
+        recency_score = 0
 
-    # 6️⃣ Retrieve top-K chunks
-    retrieved_chunks = store.search(query_embedding, top_k=top_k)
-    if not retrieved_chunks:
-        return {"query": q, "error": "No relevant chunks found", "is_violation": False}
+        date = article.get("publishedAt")
 
-    # 7️⃣ Prepare context
-    context = "\n\n".join([f"[{i+1}] {c['text']}" for i, c in enumerate(retrieved_chunks)])
-    source_mapping = {str(i+1): c.get("source", "") for i, c in enumerate(retrieved_chunks)}
+        if date:
+            try:
+                published = datetime.fromisoformat(date.replace("Z",""))
+                hours_old = (datetime.utcnow() - published).total_seconds() / 3600
+                recency_score = max(0, 1 - hours_old / 48)
+            except:
+                pass
+
+        score = similarity * 0.7 + recency_score * 0.3
+
+        ranked.append((score, article))
+
+    ranked.sort(reverse=True, key=lambda x: x[0])
+
+    return [r[1] for r in ranked]
+
+# ----------------------------
+# Summarization
+# ----------------------------
+def summarize_chunks(question, retrieved_chunks):
+
+    memory = get_memory()
+
+    context = "\n\n".join(
+        [f"[{i+1}] {c['text']}" for i, c in enumerate(retrieved_chunks)]
+    )
 
     prompt = f"""
-You are a helpful assistant. Summarize the question using the context below. 
-- Provide a concise 2-4 sentence answer.
-- Cite sources in brackets [1], [2], etc.
-- Do not copy text verbatim.
-- Only use the context provided.
+You are a news assistant.
+
+Conversation history:
+{memory}
+
+Using the news context below, answer the question.
+
+Rules:
+- 2 to 4 sentences
+- combine multiple sources
+- cite sources [1][2]
+- do not copy text
 
 Context:
 {context}
 
 Question:
-{q}
+{question}
 """
 
-    # 8️⃣ Generate answer
-    answer = None
     try:
-        if genai is not None:
-            model = genai.GenerativeModel("gemini-3.1-pro-preview")
-            response = model.generate_content(prompt)
-            if hasattr(response, "text"):
-                answer = getattr(response, "text")
-            elif isinstance(response, dict):
-                answer = response.get("text") or response.get("content")
-            else:
-                candidates = getattr(response, "candidates", None) or getattr(response, "outputs", None)
-                if candidates and len(candidates) > 0:
-                    first = candidates[0]
-                    if isinstance(first, dict):
-                        answer = first.get("text") or first.get("content")
-                    else:
-                        answer = getattr(first, "text", None) or getattr(first, "content", None)
-        if answer is None:
-            answer = "\n".join([f"[{i+1}] {c['text']}" for i, c in enumerate(retrieved_chunks)])
+
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        response = model.generate_content(prompt)
+
+        return response.text
+
     except Exception as e:
-        logger.warning("LLM generation failed, returning chunks instead: %s", e)
-        answer = "\n".join([f"[{i+1}] {c['text']}" for i, c in enumerate(retrieved_chunks)])
 
-    # 9️⃣ Compute confidence
-    confidence_score = compute_confidence(answer, retrieved_chunks)
+        logger.warning("Summarization failed %s", e)
 
-    # 10️⃣ Return
+        return " ".join([c["text"] for c in retrieved_chunks[:2]])
+
+# ----------------------------
+# Confidence Score
+# ----------------------------
+def compute_confidence(answer, chunks):
+
+    answer_emb = embed_texts([answer])[0]
+
+    chunk_texts = [c["text"] for c in chunks]
+
+    chunk_embs = embed_texts(chunk_texts)
+
+    sims = util.cos_sim(answer_emb, chunk_embs).numpy().flatten()
+
+    max_sim = float(np.max(sims))
+
+    coverage = np.mean(sims > 0.6)
+
+    return min(max_sim * coverage, 1.0)
+
+# ----------------------------
+# Trending Topics Detection
+# ----------------------------
+def detect_trending_topics(articles, clusters=5):
+
+    titles = [a.get("title","") for a in articles if a.get("title")]
+
+    if len(titles) < clusters:
+        return titles
+
+    embeddings = embed_texts(titles)
+
+    kmeans = KMeans(n_clusters=clusters, random_state=0)
+
+    labels = kmeans.fit_predict(embeddings)
+
+    topic_map = {}
+
+    for label, title in zip(labels, titles):
+        topic_map.setdefault(label, []).append(title)
+
+    topics = []
+
+    for group in topic_map.values():
+        topics.append(group[0])
+
+    return topics
+
+# ----------------------------
+# Live News Streaming
+# ----------------------------
+latest_news = []
+
+def update_news():
+
+    global latest_news
+
+    articles = fetch_news("breaking news")
+
+    latest_news = articles[:10]
+
+def start_scheduler():
+
+    scheduler = BackgroundScheduler()
+
+    scheduler.add_job(update_news, "interval", minutes=10)
+
+    scheduler.start()
+
+start_scheduler()
+
+# ----------------------------
+# Restricted Topics
+# ----------------------------
+SOCIAL_VIOLATION_KEYWORDS = [
+    "violence",
+    "illegal",
+    "hate speech",
+    "adult",
+    "drugs",
+    "terrorism"
+]
+
+# ----------------------------
+# Query Endpoint
+# ----------------------------
+@app.get("/query")
+def query_news(q: str, top_k: int = 4):
+
+    if any(word in q.lower() for word in SOCIAL_VIOLATION_KEYWORDS):
+
+        return {
+            "query": q,
+            "answer": "⚠️ This topic cannot be answered.",
+            "is_violation": True
+        }
+
+    add_message("user", q)
+
+    articles = fetch_news(q)
+
+    if not articles:
+        return {"error": "No news found"}
+
+    articles = rank_articles(q, articles)
+
+    chunks = []
+
+    for article in articles:
+
+        text = f"{article.get('title','')} {article.get('description','')}"
+
+        for chunk in chunk_text(text, 200):
+
+            chunks.append({
+                "text": chunk,
+                "source": article.get("url")
+            })
+
+    chunk_embeddings = embed_texts([c["text"] for c in chunks])
+
+    dimension = chunk_embeddings.shape[1]
+
+    store = FAISSStore(dimension)
+
+    store.add(chunk_embeddings, chunks)
+
+    query_embedding = embed_texts([q])
+
+    retrieved = store.search(query_embedding, top_k=top_k)
+
+    if not retrieved:
+        return {"error": "No relevant news"}
+
+    answer = summarize_chunks(q, retrieved)
+
+    add_message("assistant", answer)
+
+    confidence = compute_confidence(answer, retrieved)
+
+    sources = {str(i+1): c["source"] for i, c in enumerate(retrieved)}
+
     return {
         "query": q,
         "answer": answer,
-        "confidence": confidence_score,
-        "sources": source_mapping,
-        "retrieved_chunks": retrieved_chunks,
+        "confidence": confidence,
+        "sources": sources,
+        "retrieved_chunks": retrieved,
         "is_violation": False
     }
 
 # ----------------------------
-# /trending endpoint
+# Live News Endpoint
 # ----------------------------
-@app.get("/trending")
-def get_trending(top_k: int = 3):
-    articles = fetch_news("trending")  # Or general trending query
-    if isinstance(articles, dict) and "error" in articles:
-        return {"error": articles["error"], "articles": []}
+# @app.get("/live-news")
+# def get_live_news(top_k: int = 5):
+#     articles = fetch_news("latest")  # Fetch latest news
+#     if isinstance(articles, dict) and "error" in articles:
+#         return {"error": articles["error"], "articles": []}
 
-    trending_titles = [a.get("title", "") for a in articles[:top_k]]
-    return {"articles": trending_titles}
+#     # Return the first top_k articles
+#     live_articles = [{"title": a.get("title", ""), "url": a.get("url", "")} for a in articles[:top_k]]
+#     return {"articles": live_articles}
+
+@app.get("/live-news")
+def get_live_news(top_k: int = 8):
+    articles = fetch_news("latest")  # your fetch_news function
+    if isinstance(articles, dict) and "error" in articles:
+        return {"articles": []}
+    
+    formatted = []
+    for a in articles[:top_k]:
+        formatted.append({
+            "title": a.get("title", "No Title"),
+            "url": a.get("url", "#"),
+            "urlToImage": a.get("urlToImage") or "https://via.placeholder.com/400x200?text=No+Image"
+        })
+    return {"articles": formatted}
+# ----------------------------
+# Trending Topics Endpoint
+# ----------------------------
+# @app.get("/trending-topics")
+# def get_trending_topics(top_k: int = 5):
+#     articles = fetch_news("trending")  # Or any query that fetches general trending news
+#     if isinstance(articles, dict) and "error" in articles:
+#         return {"error": articles["error"], "topics": []}
+
+#     # Just return the top_k titles as trending topics
+#     top_titles = [a.get("title", "") for a in articles[:top_k]]
+#     return {"topics": top_titles}
+
+@app.get("/trending-topics")
+def get_trending(top_k: int = 8):
+    articles = fetch_news("trending")  # returns real news articles
+    if isinstance(articles, dict) and "error" in articles:
+        return {"articles": []}
+    
+    formatted = []
+    for a in articles[:top_k]:
+        formatted.append({
+            "title": a.get("title", "No Title"),
+            "url": a.get("url", "#"),
+            "urlToImage": a.get("urlToImage") or "https://via.placeholder.com/400x200?text=No+Image"
+        })
+    return {"articles": formatted}
