@@ -20,6 +20,7 @@ export default function AIChatPage() {
   const [trending, setTrending] = useState([]);
   const [liveNews, setLiveNews] = useState([]);
   const [selectedNewsId, setSelectedNewsId] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const chatEndRef = useRef(null);
   const audioRefs = useRef({});
 
@@ -157,18 +158,55 @@ export default function AIChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Top Nav: Home / Profile */}
+      {/* Top Nav: Home / Profile Dropdown */}
       <header className="w-full bg-white shadow flex justify-end px-6 py-4 sticky top-0 z-30">
-        {["Home", "Profile"].map((item) => (
+        <span
+          onClick={() => router.push("/")}
+          className="ml-6 relative cursor-pointer text-gray-700 font-semibold transition-colors duration-200 hover:text-gray-900"
+        >
+          Home
+          <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-red-700 transition-all duration-300 group-hover:w-full"></span>
+        </span>
+
+        {/* Profile Dropdown */}
+        <div className="ml-6 relative">
           <span
-            key={item}
-            onClick={() => item === "Home" ? router.push("/") : alert("Profile page not implemented")}
-            className="ml-6 relative cursor-pointer text-gray-700 font-semibold transition-colors duration-200 hover:text-gray-900 hover:underline"
+            onMouseEnter={() => setProfileOpen(true)}
+            onMouseLeave={() => setProfileOpen(false)}
+            className="cursor-pointer text-gray-700 font-semibold transition-colors duration-200 hover:text-gray-900"
           >
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-red-700 transition-all duration-300 group-hover:w-full"></span>
-            {item}
+            Profile
           </span>
-        ))}
+
+          {profileOpen && (
+            <div
+              onMouseEnter={() => setProfileOpen(true)}
+              onMouseLeave={() => setProfileOpen(false)}
+              className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+            >
+              <ul>
+                <li
+                  onClick={() => alert("Go to Account Settings")}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer transition"
+                >
+                  Account Settings
+                </li>
+                <li
+                  onClick={() => alert("Go to Dashboard")}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer transition"
+                >
+                  Dashboard
+                </li>
+                <li
+                  onClick={() => alert("Logging out...")}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer transition"
+                >
+                  Logout
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">

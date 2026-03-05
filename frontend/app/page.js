@@ -4,16 +4,29 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 
-// News card component with enhanced hover + video play
+// News card component with reactions
 function NewsCard({ article }) {
   const videoRef = useRef(null);
   const isVideo = article.mediaType === "video";
   const router = useRouter();
 
+  // Reactions
+  const [reactions, setReactions] = useState({ like: 0 });
+  const [userReaction, setUserReaction] = useState(null); // null or 'like', 'haha', etc.
+  const [showReactionPopup, setShowReactionPopup] = useState(false);
+
+  const reactionMap = {
+    like: "👍",
+    haha: "😄",
+    wow: "😮",
+    sad: "😢",
+    angry: "😡",
+  };
+
+  // Hover video play
   const handleMouseEnter = () => {
     if (isVideo && videoRef.current) videoRef.current.play();
   };
-
   const handleMouseLeave = () => {
     if (isVideo && videoRef.current) {
       videoRef.current.pause();
@@ -25,12 +38,36 @@ function NewsCard({ article }) {
     router.push(`/Aichat?query=${encodeURIComponent(article.title)}`);
   };
 
+  const handleLikeClick = () => {
+    if (!userReaction) {
+      setUserReaction("like");
+      setReactions((prev) => ({ ...prev, like: prev.like + 1 }));
+      setShowReactionPopup(true);
+    }
+  };
+
+  const handleReaction = (type) => {
+    if (userReaction) {
+      if (userReaction === "like") setReactions((prev) => ({ ...prev, like: prev.like - 1 }));
+    }
+    setUserReaction(type);
+    if (type === "like") setReactions((prev) => ({ ...prev, like: prev.like + 1 }));
+    setShowReactionPopup(false);
+  };
+
+  const handleDoubleClick = () => {
+    if (userReaction === "like") setReactions((prev) => ({ ...prev, like: prev.like - 1 }));
+    setUserReaction(null);
+    setShowReactionPopup(false);
+  };
+
   return (
     <div
       className="w-64 min-w-[16rem] bg-white shadow-md rounded overflow-hidden mr-4 cursor-pointer
                  transform transition duration-300 hover:scale-105 hover:shadow-2xl hover:-translate-y-2 hover:rotate-1"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onDoubleClick={handleDoubleClick}
     >
       {isVideo ? (
         <video
@@ -69,6 +106,37 @@ function NewsCard({ article }) {
             AI
           </button>
         </div>
+
+        {/* Reactions */}
+        <div className="flex items-center mt-3 relative">
+          {/* Default uncolored thumbs-up if not reacted */}
+          <button
+            onClick={handleLikeClick}
+            className="p-2 rounded-full transition transform hover:scale-110 text-gray-400"
+          >
+            <span className="text-lg">{userReaction ? reactionMap[userReaction] : "👍"}</span>
+            {userReaction === "like" && reactions.like > 0 && (
+              <span className="ml-1 text-xs font-bold">{reactions.like}</span>
+            )}
+          </button>
+
+          {/* Reaction popup after clicking like */}
+          {showReactionPopup && (
+            <div className="absolute bottom-10 left-0 flex space-x-2 bg-white p-2 rounded-full shadow-lg border border-gray-200">
+              {Object.keys(reactionMap).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => handleReaction(type)}
+                  className={`text-xl transition transform hover:scale-125 ${
+                    userReaction === type ? "scale-125" : ""
+                  }`}
+                >
+                  {reactionMap[type]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -86,7 +154,6 @@ export default function MSNStyleDashboard() {
   const router = useRouter();
   const sectionsRef = useRef({});
 
-  // Fetch all news
   useEffect(() => {
     const fetchAllNews = async () => {
       try {
@@ -116,33 +183,24 @@ export default function MSNStyleDashboard() {
         console.error("Error fetching news:", err);
       }
     };
-
     fetchAllNews();
   }, []);
 
-  // Scroll to section
   const scrollToSection = (key) => {
     setActiveCategory(key);
     sectionsRef.current[key]?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Get articles by category
   const getArticlesByCategory = () => {
     switch (activeCategory) {
-      case "sports":
-        return sportsNews;
-      case "money":
-        return moneyNews;
-      case "weather":
-        return weatherNews;
-      case "watch":
-        return watchNews;
-      default:
-        return [...trending, ...liveNews, ...sportsNews, ...weatherNews, ...moneyNews, ...watchNews];
+      case "sports": return sportsNews;
+      case "money": return moneyNews;
+      case "weather": return weatherNews;
+      case "watch": return watchNews;
+      default: return [...trending, ...liveNews, ...sportsNews, ...weatherNews, ...moneyNews, ...watchNews];
     }
   };
 
-  // Handle search bar submit
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -151,7 +209,6 @@ export default function MSNStyleDashboard() {
     }
   };
 
-  // Ask AI button (no query, just navigate)
   const handleAskAIButton = () => {
     router.push(`/Aichat`);
   };
