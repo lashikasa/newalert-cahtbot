@@ -319,54 +319,42 @@ def query_news(q: str, top_k: int = 4):
 # ----------------------------
 # Live News Endpoint
 # ----------------------------
-# @app.get("/live-news")
-# def get_live_news(top_k: int = 5):
-#     articles = fetch_news("latest")  # Fetch latest news
-#     if isinstance(articles, dict) and "error" in articles:
-#         return {"error": articles["error"], "articles": []}
 
-#     # Return the first top_k articles
-#     live_articles = [{"title": a.get("title", ""), "url": a.get("url", "")} for a in articles[:top_k]]
-#     return {"articles": live_articles}
-
-@app.get("/live-news")
-def get_live_news(top_k: int = 8):
-    articles = fetch_news("latest")  # your fetch_news function
-    if isinstance(articles, dict) and "error" in articles:
-        return {"articles": []}
-    
-    formatted = []
-    for a in articles[:top_k]:
-        formatted.append({
-            "title": a.get("title", "No Title"),
-            "url": a.get("url", "#"),
-            "urlToImage": a.get("urlToImage") or "https://via.placeholder.com/400x200?text=No+Image"
-        })
-    return {"articles": formatted}
-# ----------------------------
-# Trending Topics Endpoint
-# ----------------------------
-# @app.get("/trending-topics")
-# def get_trending_topics(top_k: int = 5):
-#     articles = fetch_news("trending")  # Or any query that fetches general trending news
-#     if isinstance(articles, dict) and "error" in articles:
-#         return {"error": articles["error"], "topics": []}
-
-#     # Just return the top_k titles as trending topics
-#     top_titles = [a.get("title", "") for a in articles[:top_k]]
-#     return {"topics": top_titles}
 
 @app.get("/trending-topics")
 def get_trending(top_k: int = 8):
-    articles = fetch_news("trending")  # returns real news articles
+    articles = fetch_news("trending")  # updated function
     if isinstance(articles, dict) and "error" in articles:
         return {"articles": []}
-    
-    formatted = []
-    for a in articles[:top_k]:
-        formatted.append({
-            "title": a.get("title", "No Title"),
-            "url": a.get("url", "#"),
-            "urlToImage": a.get("urlToImage") or "https://via.placeholder.com/400x200?text=No+Image"
-        })
-    return {"articles": formatted}
+    return {"articles": articles}
+
+
+@app.get("/live-news")
+def get_live(top_k: int = 8):
+    articles = fetch_news("latest")  # updated function
+    if isinstance(articles, dict) and "error" in articles:
+        return {"articles": []}
+    return {"articles": articles}
+
+@app.get("/sports-news")
+def get_sports_news():
+    return {"articles": fetch_news("sports", page_size=8)}
+
+@app.get("/weather-news")
+def get_weather_news():
+    return {"articles": fetch_news("weather", page_size=8)}
+
+@app.get("/money-news")
+def get_money_news(top_k: int = 5):
+    articles = fetch_news("money")  # fetch money/finance news
+    if isinstance(articles, dict) and "error" in articles:
+        return {"articles": []}
+    return {"articles": articles[:top_k]}
+
+
+@app.get("/watch-news")
+def get_watch_news(top_k: int = 5):
+    articles = fetch_news("entertainment OR watch OR tv")  # fetch entertainment/watch news
+    if isinstance(articles, dict) and "error" in articles:
+        return {"articles": []}
+    return {"articles": articles[:top_k]}
