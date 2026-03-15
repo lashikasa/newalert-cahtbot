@@ -42,7 +42,7 @@ The demo section is intended to give users a **visual walkthrough of the applica
 - News grid with hover effects and video previews.
 - Sticky search bar and top navigation.
 
-<img width="1247" height="671" alt="Screenshot 2026-03-05 154046" src="https://github.com/user-attachments/assets/bc720d66-3846-4d6e-8f24-7c5f93d8fbf4" />
+<img width="1135" height="663" alt="Screenshot 2026-03-05 153925" src="https://github.com/user-attachments/assets/b9f2e30b-164e-4a82-9354-a3d1e4e5be1e" />
 
 
 ### 2. AI Chatbot Demo
@@ -50,8 +50,7 @@ The demo section is intended to give users a **visual walkthrough of the applica
 - Confidence score, sentiment, and sources displayed.
 - Text-to-Speech play and pause controls.
 
-<img width="1135" height="663" alt="Screenshot 2026-03-05 153925" src="https://github.com/user-attachments/assets/b9f2e30b-164e-4a82-9354-a3d1e4e5be1e" />
-
+<img width="1247" height="671" alt="Screenshot 2026-03-05 154046" src="https://github.com/user-attachments/assets/bc720d66-3846-4d6e-8f24-7c5f93d8fbf4" />
 
 ### 3. Reactions Demo
 - Default gray thumbs-up before clicking.
