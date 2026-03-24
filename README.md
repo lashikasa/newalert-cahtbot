@@ -1,4 +1,4 @@
-# AI News Alert Chatbot
+ # AI News Alert Chatbot
 
 The **AI News Alert Chatbot** is an interactive web application that combines **real-time news aggregation** with **AI-powered insights**. It allows users to browse trending news, interact with an AI assistant to get summaries or explanations, and engage with content using reactions.
 
